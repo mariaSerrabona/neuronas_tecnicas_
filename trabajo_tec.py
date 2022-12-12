@@ -115,10 +115,14 @@ class Model(nn.Module):
 
     super().__init__()
 
+    #Aquí los que se está haciendo es preparar la imagen para leugo poderla pasar al modelo de clasificación de imágenes
+
     #creo que estas son las capas de la red neuronal
     self.features = nn.Sequential(
-      #Conv2d método para generar un red convolucional 
+      #Conv2d método para generar un red convolucional            CNN video YT
+      #se pasan por parámetro las dimensiones 3x64
       nn.Conv2d(3, 64, 3, 1, 1),
+      #siempre se pasa por parámetro la segunda diemnsión de la capa
       nn.BatchNorm2d(64),
 
       #FUNCIÓN DE ACTIVACIÓN (más abajo lo explico)
@@ -126,8 +130,10 @@ class Model(nn.Module):
 
       nn.Dropout(p=0.3),
 
+      #la siguiente capa debe empezar por el mismo número que terminó la anyterior (64)
       nn.Conv2d(64, 128, 3, 1, 1),
       nn.BatchNorm2d(128),
+      #relacion que existe entre las capas neuronales que hemos definido
       nn.ReLU(),
       #tipo de capa ue se usa en redes neuronales para aplicar un pool máximo de 2d sobre una señal input formada de muchos planos input  (una foto)
       #fracciona un conjunto de datos y los divide en varios cuadrantes y coge el valor valor de cada uno de ellos, generando otro conjunto de datos y así de forma sucesiva
@@ -146,6 +152,7 @@ class Model(nn.Module):
 
       nn.MaxPool2d(2, 2),
 
+      #cada vez que se ejecuta esta sentencia se reduce el tamaño de la imagen
       nn.Conv2d(512, 512, 3, 1, 1),
       nn.BatchNorm2d(512),
       nn.ReLU(),
@@ -187,18 +194,22 @@ class Model(nn.Module):
 
   #Una vez hemos definido nuestra red neuronal con todos los elementos y función de activación, llamamos a todos los métodos para que la red pueda implementarse
 
+  #una vez tenemos las imágenes preparadas, las pasamos a clasificación 
   def forward(self, x):
     #los mismos datos (misma variable x) va psando por todos los procesos
     #se aplican  los métodos de arriba a las capas de las neuroas
     #se crea y deifnen las capas de la red neuronal
+
+    #se aplican todos los procesos de convolución de las capas neuronales llamando al método del constructor, para no tener que ir una a una con todas las capas
     x = self.features(x)
-    #formato para visualizar los datos
+    #formato para la distribución correcta de los datos. Se 'aplanan'
+    #importante que se pase por parámetro la cantidad de muestras y el valor que conforma la regresión lineal del modelo
     x = x.view(x.size(0), 2048)
     #aplicamos la lectura de las capas
     x = self.output(x)
     return x
 
-#se guarda el modelo en nuetro dispositivo
+#se guarda el modelo en nuetro dispositivo(GPU)
 model = Model().to(device)
 
 #método de la librería nnpara calcular la función de error de forma automática
@@ -236,6 +247,7 @@ history_loss = []
 #iteraciones que se realizan
 epochs = 300
 #ejecución del entrenamiento
+#en este punto vemos como el error va decreciendo y se va entrenando el modelo con todas las fotos de categorias diferentes 
 for epoch in range(epochs):
   epoch_loss = 0
   for i in tqdm(range(len(df_train)), position=0, leave=True):
