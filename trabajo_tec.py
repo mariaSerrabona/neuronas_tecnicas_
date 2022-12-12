@@ -20,14 +20,22 @@ from torchvision import transforms
 from IPython.display import display
 from tqdm import tqdm
 import pickle
+
+#para importar datasets que tiene la libreria
 import torchvision
 
 dataset = load_dataset("cifar10") #cargamos el dataset
 
 train_df = dataset["train"] #separamos en train
 test_df = dataset["test"] #separamos en test
+
+#funciones especial de tensor en la que se pueden aplicar transformadas directamente a imágenes para que puedan ser leídas por la librería:
 to_tensor = transforms.ToTensor() #pasamos de df a tensor mediante la función
+
+#esta función en concreto, transforma el tipo de imagen a ua PILImage, lo  que da a python capacidad de lectura y edición de las fotos
 to_pil = transforms.ToPILImage()  #transformamos las imágenes
+
+#no es extrictamemte necesario
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #almacenamiento de la información a la CPU (creo que solo se puede ejcutar en windows)
 
 class TrainDataset(Dataset):  #clase para tratar los datos de entrenamiento
@@ -36,15 +44,20 @@ class TrainDataset(Dataset):  #clase para tratar los datos de entrenamiento
 
   def __getitem__(self, index): #devuelve el elemnto en una posición específica de una lista
     img_x = train_df[index]["img"].resize((32, 32)) #coge la imagen de una posición específica de la lista y reescala la imagen a 32x32
-    return (to_tensor(img_x), torch.tensor([train_df[index]["label"]])) #cambiamos el formato de la imagena tensor y generamos un constructor de torch con la imagen de los datos de entrenamiento
+    return (to_tensor(img_x), torch.tensor([train_df[index]["label"]])) #cambiamos el formato de la imagena a tensory generamos un constructor de tensor con la imagen de los datos de entrenamiento
+                                                      #la función label retorna el tipo de elemento y la fila o columna sobre la que se está trabajando
+
+
 
 class TestDataset(Dataset): #clase de estudio de los datos para comprobar el entrenamiento
   def __len__(self):  #longitud de los datos test
     return len(test_df)
 
+
+#retorna una tupla
   def __getitem__(self, index):
     img_x = test_df[index]["img"].resize((32, 32))  #coge la imagen de una posición específica de la lista y la reescala a un fromato 32x32
-    return (to_tensor(img_x), torch.tensor([test_df[index]["label"]]))#cambiamos el formato de la imagen a tensor y generamos un constructor de torch con la imagen de los datos de entrenemiento
+    return (to_tensor(img_x), torch.tensor([test_df[index]["label"]]))#cambiamos el formato de la imagen a tensor y generamos un constructor de tensor con la imagen de los datos de entrenemiento
 
 train_dataset = TrainDataset() #se llama a la función con los datos de etrenamiento
 test_dataset = TestDataset()  #se llama a la función con los datos de testeo
@@ -53,7 +66,7 @@ test_dataset = TestDataset()  #se llama a la función con los datos de testeo
 train_set = DataLoader( #sobre los datos de entrenamiento, se aplica el DataLoader, es una preparación de los datos 
     train_dataset,
     batch_size = 200, #cuantas muestras procesar en cada proceso
-    shuffle = True  #datos mezclados en cada epoch
+    shuffle = True  #datos mezclados en cada epoch, muy útil para el entrenamiento de los datos
 )
 
 test_set = DataLoader(  #aplicamos lo mismo pero sin atributos sobre los datos de test
@@ -77,7 +90,7 @@ def train(input, real):
   output = model(input)
   # la pérdida es la desviacón típica al cuadrado
   lost = loss_function(output, real)
-  
+
   #se aplica el algoritmo hacia atrás para cualcular el gradiente
   lost.backward()
   optim.step()
@@ -96,19 +109,29 @@ df_test.columns = ["img", "label"]
 
 #clase del modelo (no sé lo que hace pero el nuestro será diferente aunque parecido por la comparación de imágenes)
 class Model(nn.Module):
+
+  #constructor del model
   def __init__(self):
+
     super().__init__()
+
+    #creo que estas son las capas de la red neuronal
     self.features = nn.Sequential(
+      #Conv2d método para generar un red convolucional 
       nn.Conv2d(3, 64, 3, 1, 1),
       nn.BatchNorm2d(64),
+
+      #FUNCIÓN DE ACTIVACIÓN (más abajo lo explico)
       nn.ReLU(),
-      
+
       nn.Dropout(p=0.3),
 
       nn.Conv2d(64, 128, 3, 1, 1),
       nn.BatchNorm2d(128),
       nn.ReLU(),
-
+      #tipo de capa ue se usa en redes neuronales para aplicar un pool máximo de 2d sobre una señal input formada de muchos planos input  (una foto)
+      #fracciona un conjunto de datos y los divide en varios cuadrantes y coge el valor valor de cada uno de ellos, generando otro conjunto de datos y así de forma sucesiva
+      #reduce el coste computacional de la lectura de las imágenes porque reduce el tamaño de las mismas. Además eviat el overfitting del modelo 
       nn.MaxPool2d(2, 2),
 
       nn.Conv2d(128, 256, 3, 1, 1),
@@ -137,25 +160,51 @@ class Model(nn.Module):
     )
 
 
+    #aquí tenemos la lectura de las capas con la función de activación
+
+    #esta función trata a las capas de la neurona como ni fuesen un conjunto o una cadena. Se leen con el mismo orden que entraron. Se dice que se leen en cascada
     self.output = nn.Sequential(
+      #aplica una transformación lineal (ax+b) a los datos que se pasan. Los parámetos son los datos de entrada y se salida
       nn.Linear(2048, 512),
+      #aplica batch normalization a un conjunto de datos 2d ó 3d
       nn.BatchNorm1d(512),
+
+      #FUNCIÓN DE ACTIVACIÓN
+      #Applies the rectified linear unit function element-wi
+      #para que los procesos neuronales no sean solo lineales y puedan desarrollar tereas más complejas. Toma valor nulo para valores negativos y luego crece
+      #linealmente generando una regresiçon lineal.
+      #se usa para las capas ocultas de las neuronas
+
+      #problemas de esta fucnión: al tomar valores nulos, los gradientes también serán nulos y puede que de problemas en el cálculo de los mismos.
+      #si pasa, usar LeakyReLu
       nn.ReLU(),
 
+      #proceso de regularización
       nn.Dropout(p = 0.3),
 
       nn.Linear(512, 10),
     )
 
+  #Una vez hemos definido nuestra red neuronal con todos los elementos y función de activación, llamamos a todos los métodos para que la red pueda implementarse
+
   def forward(self, x):
+    #los mismos datos (misma variable x) va psando por todos los procesos
+    #se aplican  los métodos de arriba a las capas de las neuroas
+    #se crea y deifnen las capas de la red neuronal
     x = self.features(x)
+    #formato para visualizar los datos
     x = x.view(x.size(0), 2048)
+    #aplicamos la lectura de las capas
     x = self.output(x)
     return x
 
 #se guarda el modelo en nuetro dispositivo
 model = Model().to(device)
+
 #método de la librería nnpara calcular la función de error de forma automática
+#CrossEntropyLoss esta función mide la actuación de nuestro modelo, teniendo valores de 0 a 1 usudao en probabilidad de multiclases
+# a mayor sea este parámetro, peor aproximará nuestro modelo
+#dentro de esta función, ya se está implementando otra my importante de esta libreria (softmax) es importante que si ya estamos usando CossEntropyLoss, no la usemos para el mismo modelo 
 loss_function = nn.CrossEntropyLoss()
 optim = torch.optim.SGD(model.parameters(), lr = 0.01)
 
@@ -165,8 +214,12 @@ def train(input, real):
 
   output = model(input)
   lost = loss_function(output, real)
-  
+
   lost.backward()
+
+  #FUCNIÓN DE ACTIVACIÓN
+  #realiza un único paso de optimización
+  #parámetro de actualización
   optim.step()
 
   return lost
@@ -195,7 +248,7 @@ for epoch in range(epochs):
 #guardar el modelo
 torch.save(model, "tecnicas_optim.plt")
 
-#gráfico del conjunto de errores 
+#gráfico del conjunto de errores
 plt.plot(history_loss)
 
 #label: 0-9 with the following correspondence 0 airplane 1 automobile 2 bird 3 cat 4 deer 5 dog 6 frog 7 horse 8 ship 9 truck
