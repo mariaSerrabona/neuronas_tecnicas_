@@ -22,54 +22,63 @@ from tqdm import tqdm
 import pickle
 import torchvision
 
-dataset = load_dataset("cifar10")
+dataset = load_dataset("cifar10") #cargamos el dataset
 
-train_df = dataset["train"]
-test_df = dataset["test"]
-to_tensor = transforms.ToTensor()
-to_pil = transforms.ToPILImage()
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+train_df = dataset["train"] #separamos en train
+test_df = dataset["test"] #separamos en test
+to_tensor = transforms.ToTensor() #pasamos de df a tensor mediante la función
+to_pil = transforms.ToPILImage()  #transformamos las imágenes
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #almacenamiento de la información a la CPU (creo que solo se puede ejcutar en windows)
 
-class TrainDataset(Dataset):
-  def __len__(self):
+class TrainDataset(Dataset):  #clase para tratar los datos de entrenamiento
+  def __len__(self):  #atribtuto privado para saber la longitud de los datos de entrenamiento
     return len(train_df)
 
-  def __getitem__(self, index):
-    img_x = train_df[index]["img"].resize((32, 32))
-    return (to_tensor(img_x), torch.tensor([train_df[index]["label"]]))
+  def __getitem__(self, index): #devuelve el elemnto en una posición específica de una lista
+    img_x = train_df[index]["img"].resize((32, 32)) #coge la imagen de una posición específica de la lista y reescala la imagen a 32x32
+    return (to_tensor(img_x), torch.tensor([train_df[index]["label"]])) #cambiamos el formato de la imagena tensor y generamos un constructor de torch con la imagen de los datos de entrenamiento
 
-class TestDataset(Dataset):
-  def __len__(self):
+class TestDataset(Dataset): #clase de estudio de los datos para comprobar el entrenamiento
+  def __len__(self):  #longitud de los datos test
     return len(test_df)
 
   def __getitem__(self, index):
-    img_x = test_df[index]["img"].resize((32, 32))
-    return (to_tensor(img_x), torch.tensor([test_df[index]["label"]]))
+    img_x = test_df[index]["img"].resize((32, 32))  #coge la imagen de una posición específica de la lista y la reescala a un fromato 32x32
+    return (to_tensor(img_x), torch.tensor([test_df[index]["label"]]))#cambiamos el formato de la imagen a tensor y generamos un constructor de torch con la imagen de los datos de entrenemiento
 
-train_dataset = TrainDataset()
-test_dataset = TestDataset()
+train_dataset = TrainDataset() #se llama a la función con los datos de etrenamiento
+test_dataset = TestDataset()  #se llama a la función con los datos de testeo
 
-train_set = DataLoader(
+
+train_set = DataLoader( #sobre los datos de entrenamiento, se aplica el DataLoader, es una preparación de los datos 
     train_dataset,
-    batch_size = 200, 
-    shuffle = True
+    batch_size = 200, #cuantas muestras procesar en cada proceso
+    shuffle = True  #datos mezclados en cada epoch
 )
 
-test_set = DataLoader(
+test_set = DataLoader(  #aplicamos lo mismo pero sin atributos sobre los datos de test
     test_dataset
 )
 
+#se genera un dataframe con los datos de entrenamiento, y los de test(antes estaban en torch)
 df_test = pd.DataFrame(test_set)
 df_train = pd.DataFrame(train_set)
 
+#se pasa la información a un csv
 df_test.to_csv("test.csv", index = False)
 
+#función train a la que se pasa por parámetro el valor real y la estimación
 def train(input, real):
+      #muy importante que el gradiente se ponga a cero en cada iteración porque si no, los datos se van almacenando en la misma
+      #parte de memoria y al final, tendremos la suma de todos los gradientes
   optim.zero_grad()
 
+  #input es lo que nos saca el modelo
   output = model(input)
+  # la pérdida es la desviacón típica al cuadrado
   lost = loss_function(output, real)
   
+  #se aplica el algoritmo hacia atrás para cualcular el gradiente
   lost.backward()
   optim.step()
 
@@ -81,9 +90,11 @@ def encode_labels(batch_size, input):
     data[i][j.item()] = 1
   return data
 
+#en nuestro df solo hay dos columnas, una con las imágenes y otra con su clasificación
 df_train.columns = ["img", "label"]
 df_test.columns = ["img", "label"]
 
+#clase del modelo (no sé lo que hace pero el nuestro será diferente aunque parecido por la comparación de imágenes)
 class Model(nn.Module):
   def __init__(self):
     super().__init__()
@@ -142,10 +153,13 @@ class Model(nn.Module):
     x = self.output(x)
     return x
 
+#se guarda el modelo en nuetro dispositivo
 model = Model().to(device)
+#método de la librería nnpara calcular la función de error de forma automática
 loss_function = nn.CrossEntropyLoss()
 optim = torch.optim.SGD(model.parameters(), lr = 0.01)
 
+#función repetida
 def train(input, real):
   optim.zero_grad()
 
@@ -157,15 +171,18 @@ def train(input, real):
 
   return lost
 
-
+#creo que repetida también
 def encode_labels(batch_size, input):
   data = torch.zeros((batch_size, 10)).to(device)
   for i, j in enumerate(input):
     data[i][j.item()] = 1
   return data
 
+#carga de todos los errores
 history_loss = []
+#iteraciones que se realizan
 epochs = 300
+#ejecución del entrenamiento
 for epoch in range(epochs):
   epoch_loss = 0
   for i in tqdm(range(len(df_train)), position=0, leave=True):
@@ -175,8 +192,10 @@ for epoch in range(epochs):
   print(f"Epoch:{epoch}. Loss:{epoch_loss.item()/i}")
   history_loss.append(epoch_loss.item()/i)
 
+#guardar el modelo
 torch.save(model, "tecnicas_optim.plt")
 
+#gráfico del conjunto de errores 
 plt.plot(history_loss)
 
 #label: 0-9 with the following correspondence 0 airplane 1 automobile 2 bird 3 cat 4 deer 5 dog 6 frog 7 horse 8 ship 9 truck
@@ -185,6 +204,7 @@ model = torch.load("tecnicas_optim.plt")
 labeled = {0: "airplane", 1: "automobile", 2: "bird", 3: "cat", 4: "deer", 5: "dog", 6: "frog", 7: "horse", 8: "ship", 9: "truck"}
 data = {i: [0, 0] for i in labeled.keys()}
 model.eval()
+#esto no es necesario hacerlo
 with torch.no_grad():
   for i in range(len(df_test)):
     input = df_test.iloc[i]["img"].to(device)
